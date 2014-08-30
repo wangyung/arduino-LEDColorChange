@@ -65,6 +65,7 @@ public class BluetoothConnection {
     public void addCommand(Command command) {
         if (mCommandQueue.remainingCapacity() == 0) {
             Log.w(TAG, "command queue is full");
+            mCommandQueue.clear();
         } else {
             mCommandQueue.add(command);
         }
@@ -75,7 +76,7 @@ public class BluetoothConnection {
             Command command = new LEDColorCommand(0);
             mSocket.getOutputStream().write(command.getRawData());
             try {
-                Thread.sleep(1000);
+                Thread.sleep(100);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
