@@ -3,8 +3,16 @@ package tw.freddie.ledcolor;
 import android.app.Activity;
 import android.app.FragmentTransaction;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothGattCharacteristic;
+import android.bluetooth.BluetoothGattService;
+import android.content.BroadcastReceiver;
+import android.content.ComponentName;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.ServiceConnection;
 import android.os.Bundle;
+import android.os.IBinder;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -14,10 +22,12 @@ import android.widget.Toast;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 
 import tw.freddie.ledcolor.adapter.BTDeviceAdapter;
 import tw.freddie.ledcolor.bluetooth.*;
+import tw.freddie.ledcolor.bluetooth.le.BluetoothLeService;
 
 public class MainActivity extends Activity {
 
@@ -26,6 +36,26 @@ public class MainActivity extends Activity {
     private MainFragment mFragment;
     private ColorPickerFragment mColorPickerFragment;
     private BluetoothManager mBTManager;
+    private BluetoothLeService mBLEService;
+
+    private final ServiceConnection mServiceConnection = new ServiceConnection() {
+
+        @Override
+        public void onServiceConnected(ComponentName componentName, IBinder service) {
+            mBLEService = ((BluetoothLeService.LocalBinder) service).getService();
+            if (!mBLEService.initialize()) {
+                Log.e(TAG, "Unable to initialize Bluetooth");
+                finish();
+            }
+            // Automatically connects to the device upon successful start-up initialization.
+//            mBLEService.connect(mDeviceAddress);
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName componentName) {
+            mBLEService = null;
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -41,6 +71,8 @@ public class MainActivity extends Activity {
 
         mFragment.setItemClickDelegate(mItemClickListener);
         mBTManager = new BluetoothManager();
+        Intent gattServiceIntent = new Intent(this, BluetoothLeService.class);
+        bindService(gattServiceIntent, mServiceConnection, BIND_AUTO_CREATE);
     }
 
     private AdapterView.OnItemClickListener mItemClickListener = new AdapterView.OnItemClickListener() {
@@ -48,7 +80,7 @@ public class MainActivity extends Activity {
         public void onItemClick(AdapterView<?> adapterView, View view, int position, long id) {
             BluetoothDevice device = (BluetoothDevice)mFragment.getAdapter().getItem(position);
             try {
-                showColorPickerFragment(new BluetoothConnection(device));
+                showColorPickerFragment(new BluetoothConnection(device, mBLEService));
             } catch (IOException e) {
                 e.printStackTrace();
                 Toast.makeText(MainActivity.this, getString(R.string.cannot_connect_device),
@@ -76,6 +108,8 @@ public class MainActivity extends Activity {
         } else {
             Log.e(TAG, "This device doesn't have Bluetooth support");
         }
+
+
     }
 
     private void initBluetooth() {

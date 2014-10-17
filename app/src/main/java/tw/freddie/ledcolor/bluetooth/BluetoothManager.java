@@ -17,16 +17,6 @@ public class BluetoothManager {
     private BluetoothAdapter mBTAdapter = BluetoothAdapter.getDefaultAdapter();
     public static final UUID uuid = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
 
-    public BluetoothConnection createConnection(BluetoothDevice device) {
-        BluetoothConnection connection = null;
-        try {
-            connection = new BluetoothConnection(device);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        return connection;
-    }
-
     public boolean hasBluetooth() {
         return mBTAdapter != null;
     }

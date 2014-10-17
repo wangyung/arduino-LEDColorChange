@@ -1,14 +1,18 @@
 package tw.freddie.ledcolor.bluetooth;
 
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothGattCharacteristic;
+import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothSocket;
 import android.util.Log;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
+import tw.freddie.ledcolor.bluetooth.le.BluetoothLeService;
 import tw.freddie.ledcolor.commands.*;
 
 public class BluetoothConnection {
@@ -17,6 +21,7 @@ public class BluetoothConnection {
 
     private BluetoothDevice mDevice;
     private BluetoothSocket mSocket;
+    private BluetoothLeService mBLEService;
     private Thread mCommunicationThread;
     private ConnectionStatus mConnectionStatus;
     private BlockingQueue<Command> mCommandQueue;
@@ -27,38 +32,37 @@ public class BluetoothConnection {
         Connected
     }
 
-    public BluetoothConnection(BluetoothDevice device) throws IOException {
+    public BluetoothConnection(BluetoothDevice device, BluetoothLeService bleService) throws IOException {
         mDevice = device;
         mSocket = mDevice.createRfcommSocketToServiceRecord(BluetoothManager.uuid);
         mConnectionStatus = ConnectionStatus.Disconnected;
         mCommandQueue = new ArrayBlockingQueue<Command>(50);
+        mBLEService = bleService;
     }
 
     public void connect() {
         mCommunicationThread = new Thread(new Runnable() {
             @Override
             public void run() {
-                try {
-                    //TODO: only support send data now
-                    mConnectionStatus = ConnectionStatus.Connecting;
-                    mSocket.connect();
-                    mConnectionStatus = ConnectionStatus.Connected;
-                    OutputStream outputStream = mSocket.getOutputStream();
-                    while (mSocket.isConnected()) {
-                        try {
-                            Command command = mCommandQueue.take();
-                            outputStream.write(command.getRawData());
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
-                    }
+                mConnectionStatus = ConnectionStatus.Connecting;
+                mBLEService.connect(mDevice.getAddress());
+                mConnectionStatus = ConnectionStatus.Connected;
 
-                    mConnectionStatus = ConnectionStatus.Disconnected;
-                } catch (IOException e) {
-                    e.printStackTrace();
+                while (mConnectionStatus != ConnectionStatus.Disconnected) {
+                    try {
+                        Command command = mCommandQueue.take();
+                        BluetoothGattCharacteristic tx = mBLEService.getCharacteristicTX();
+                        if (tx != null) {
+                            tx.setValue(command.getRawData());
+                            mBLEService.writeCharacteristic(tx);
+                        }
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
                 }
             }
         });
+
         mCommunicationThread.start();
     }
 
@@ -72,18 +76,21 @@ public class BluetoothConnection {
     }
 
     public void disconnect() {
-        try {
-            Command command = new LEDColorCommand(0);
-            mSocket.getOutputStream().write(command.getRawData());
+        if (mSocket != null) {
             try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
+                Command command = new LEDColorCommand(0);
+                mSocket.getOutputStream().write(command.getRawData());
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                mSocket.close();
+            } catch (IOException e) {
                 e.printStackTrace();
             }
-            mSocket.close();
-        } catch (IOException e) {
-            e.printStackTrace();
         }
+        mConnectionStatus = ConnectionStatus.Disconnected;
     }
 
     public ConnectionStatus getConnectionStatus() {

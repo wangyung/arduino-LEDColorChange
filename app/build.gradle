@@ -6,7 +6,7 @@ android {
 
     defaultConfig {
         applicationId "tw.freddie.bt.ledcolor"
-        minSdkVersion 16
+        minSdkVersion 18
         targetSdkVersion 19
         versionCode 1
         versionName "1.0"
